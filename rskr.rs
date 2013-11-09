@@ -1,4 +1,5 @@
 extern mod extra;
+extern mod rustdoc;
 extern mod http;
 
 use std::rt::io::net::ip::{SocketAddr, Ipv4Addr};
@@ -51,7 +52,9 @@ impl<'self> PercentDecoder for &'self str {
 }
 
 #[deriving(Clone)]
-struct RustKrServer;
+struct RustKrServer {
+    doc_dir: ~str,
+}
 
 impl Server for RustKrServer {
     fn get_config(&self) -> Config {
@@ -68,8 +71,16 @@ impl Server for RustKrServer {
             AbsolutePath(ref url) => {
                 // remove '/'
                 let title = url.slice_from(1);
-                let title = title.decode_percent();
-                self.read_page(title)
+                if self.is_bad_title(title) {
+                    ~":p"
+                } else {
+                    let title = if title.len() == 0 {
+                        ~"index"
+                    } else {
+                        title.decode_percent()
+                    };
+                    self.read_page(title)
+                }
             },
             _ => {
                 ~"tekitou"
@@ -102,13 +113,42 @@ impl Server for RustKrServer {
 }
 
 impl RustKrServer {
+    fn is_bad_title(&self, title: &str) -> bool {
+        if title.contains_char('.') {
+            return true;
+        }
+        if title.contains_char('/') {
+            return true;
+        }
+        if !title.is_ascii() {
+            return true;
+        }
+
+        false
+    }
+
     fn read_page(&self, title: &str) -> ~str {
-        format!("read_page: title: {:s}", title)
+        use std::rt::io::{Open, Read};
+        use std::rt::io::fs::File;
+
+        let path = format!("{:s}/{:s}.md", self.doc_dir, title);
+        let mut f = File::open_mode(&Path::new(path), Open, Read);
+        let text = f.read_to_end();
+        let text = std::str::from_utf8(text);
+        let md = rustdoc::html::markdown::Markdown(text);
+        format!("{}", md)
+    }
+
+    pub fn new(doc_dir: ~str) -> RustKrServer {
+        RustKrServer {
+            doc_dir: doc_dir,
+        }
     }
 }
 
 fn main() {
-    RustKrServer.serve_forever();
+    let server = RustKrServer::new(~"docs");
+    server.serve_forever();
 }
 
 #[cfg(test)]
