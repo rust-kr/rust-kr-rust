@@ -128,15 +128,23 @@ impl RustKrServer {
     }
 
     fn read_page(&self, title: &str) -> ~str {
-        use std::rt::io::{Open, Read};
-        use std::rt::io::fs::File;
+        use std::rt::io::File;
 
         let path = format!("{:s}/{:s}.md", self.doc_dir, title);
-        let mut f = File::open_mode(&Path::new(path), Open, Read);
+        let path = Path::new(path);
+        if !path.exists() {
+            return ~"No such page";
+        }
+        let mut f = File::open(&path);
         let text = f.read_to_end();
         let text = std::str::from_utf8(text);
         let md = rustdoc::html::markdown::Markdown(text);
-        format!("{}", md)
+        let title = if title == "index" {
+            "rust-kr.org"
+        } else {
+            title
+        };
+        format!("<h1>{}</h1>\n{}", title, md)
     }
 
     pub fn new(doc_dir: ~str) -> RustKrServer {
