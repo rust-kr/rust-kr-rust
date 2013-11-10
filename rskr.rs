@@ -3,7 +3,9 @@ extern mod rustdoc;
 extern mod http;
 
 use std::rt::io::net::ip::{SocketAddr, Ipv4Addr};
-use std::rt::io::Writer;
+use std::rt::io::{Writer, File};
+use std::rt::io::fs::readdir;
+
 use extra::time;
 
 use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
@@ -79,7 +81,11 @@ impl Server for RustKrServer {
                     } else {
                         title.decode_percent()
                     };
-                    self.read_page(title)
+                    if title == ~"_pages" {
+                        self.list_pages()
+                    } else {
+                        self.read_page(title)
+                    }
                 }
             },
             _ => {
@@ -128,8 +134,6 @@ impl RustKrServer {
     }
 
     fn read_page(&self, title: &str) -> ~str {
-        use std::rt::io::File;
-
         let path = format!("{:s}/{:s}.md", self.doc_dir, title);
         let path = Path::new(path);
         if !path.exists() {
@@ -145,6 +149,40 @@ impl RustKrServer {
             title
         };
         format!("<h1>{}</h1>\n{}", title, md)
+    }
+
+    pub fn list_pages(&self) -> ~str {
+        let files = {
+            let dir = Path::new(self.doc_dir.clone());
+            if !dir.exists() {
+                return ~"No pages found";
+            }
+            readdir(&dir)
+        };
+        let mut pages = ~[];
+        for file in files.iter() {
+            if file.is_dir() {
+                continue;
+            }
+            match file.as_str() {
+                None => continue,
+                Some(s) => {
+                    if s.ends_with(".md") {
+                        pages.push(file.filestem_str().unwrap().to_owned());
+                    }
+                }
+            }
+        }
+        if pages.len() > 0 {
+            let mut ret = ~"<ul>\n";
+            for page in pages.iter() {
+                ret = ret + format!(r#"<li><a href="/{:s}">{:s}</a></li>"#, *page, *page);
+            }
+            ret = ret + "</ul>";
+            ret
+        } else {
+            ~"No pages found"
+        }
     }
 
     pub fn new(doc_dir: ~str) -> RustKrServer {
