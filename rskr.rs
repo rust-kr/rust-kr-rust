@@ -93,14 +93,24 @@ impl Server for RustKrServer {
             }
         };
 
+        // TODO: template
         let header = r#"<!doctype html>
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>한국 러스트 사용자 그룹</title>
 </head>
-<body>"#;
-        let footer = "</body> </html>";
+<body><article>"#;
+        let footer = r#"</article>
+<footer>
+이 사이트는
+<a href="https://github.com/chris-morgan/rust-http">rust-http</a>를
+기반으로 사용하고 있습니다.
+사이트 소스 코드:
+<a href="https://github.com/klutzy/rust-kr-rust">github.com/klutzy/rust-kr-rust</a>
+</footer>
+</body>
+</html>"#;
 
         let output = header + content + footer;
         let output_b = output.as_bytes();
