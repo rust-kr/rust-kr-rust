@@ -12,6 +12,8 @@ use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
 
+mod jinja2;
+
 // assumes utf-8
 pub trait PercentDecoder {
     fn decode_percent(&self) -> ~str;
@@ -93,26 +95,15 @@ impl Server for RustKrServer {
             }
         };
 
-        // TODO: template
-        let header = r#"<!doctype html>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>한국 러스트 사용자 그룹</title>
-</head>
-<body><article>"#;
-        let footer = r#"</article>
-<footer>
-이 사이트는
-<a href="https://github.com/chris-morgan/rust-http">rust-http</a>를
-기반으로 사용하고 있습니다.
-사이트 소스 코드:
-<a href="https://github.com/klutzy/rust-kr-rust">github.com/klutzy/rust-kr-rust</a>
-</footer>
-</body>
-</html>"#;
-
-        let output = header + content + footer;
+        let template_path = Path::new("templates/default.html");
+        let mut template_file = File::open(&template_path);
+        let template = template_file.read_to_end();
+        let template = std::str::from_utf8(template);
+        let template = jinja2::Template::new(template);
+        let values = [
+            ("content", content.as_slice()),
+        ];
+        let output = template.replace(values);
         let output_b = output.as_bytes();
 
         w.headers.date = Some(time::now_utc());
