@@ -1,5 +1,6 @@
+#[allow(cstack)]; // for markdown
+
 extern mod extra;
-extern mod rustdoc;
 extern mod http;
 
 use std::rt::io::net::ip::{SocketAddr, Ipv4Addr};
@@ -12,6 +13,7 @@ use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
 
+mod markdown;
 mod jinja2;
 
 // assumes utf-8
@@ -145,7 +147,7 @@ impl RustKrServer {
         let mut f = File::open(&path);
         let text = f.read_to_end();
         let text = std::str::from_utf8(text);
-        let md = rustdoc::html::markdown::Markdown(text);
+        let md = markdown::Markdown(text);
         format!("{}", md)
     }
 
