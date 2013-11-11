@@ -71,12 +71,12 @@ impl Server for RustKrServer {
     }
 
     fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
-        let content = match r.request_uri {
+        let (title, content) = match r.request_uri {
             AbsolutePath(ref url) => {
                 // remove '/'
                 let title = url.slice_from(1);
                 if self.is_bad_title(title) {
-                    ~":p"
+                    (~":p", ~"Bad title")
                 } else {
                     let title = if title.len() == 0 {
                         ~"index"
@@ -84,14 +84,15 @@ impl Server for RustKrServer {
                         title.decode_percent()
                     };
                     if title == ~"_pages" {
-                        self.list_pages()
+                        (~"모든 문서", self.list_pages())
                     } else {
-                        self.read_page(title)
+                        let page = self.read_page(title);
+                        (title, page)
                     }
                 }
             },
             _ => {
-                ~"tekitou"
+                (~"???", ~"???")
             }
         };
 
@@ -102,6 +103,7 @@ impl Server for RustKrServer {
         let template = jinja2::Template::new(template);
         let values = [
             ("content", content.as_slice()),
+            ("title", title.as_slice()),
         ];
         let output = template.replace(values);
         let output_b = output.as_bytes();
@@ -144,12 +146,7 @@ impl RustKrServer {
         let text = f.read_to_end();
         let text = std::str::from_utf8(text);
         let md = rustdoc::html::markdown::Markdown(text);
-        let title = if title == "index" {
-            "rust-kr.org"
-        } else {
-            title
-        };
-        format!("<h1>{}</h1>\n{}", title, md)
+        format!("{}", md)
     }
 
     pub fn list_pages(&self) -> ~str {
@@ -175,7 +172,7 @@ impl RustKrServer {
             }
         }
         if pages.len() > 0 {
-            let mut ret = ~"<h1>모든 문서</h1><ul>\n";
+            let mut ret = ~"<ul>\n";
             for page in pages.iter() {
                 ret = ret + format!(r#"<li><a href="/{:s}">{:s}</a></li>"#, *page, *page);
             }
