@@ -175,7 +175,7 @@ impl RustKrServer {
             }
         }
         if pages.len() > 0 {
-            let mut ret = ~"<ul>\n";
+            let mut ret = ~"<h1>모든 문서</h1><ul>\n";
             for page in pages.iter() {
                 ret = ret + format!(r#"<li><a href="/{:s}">{:s}</a></li>"#, *page, *page);
             }
