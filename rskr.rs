@@ -1,5 +1,3 @@
-#[allow(cstack)]; // for markdown
-
 extern mod extra;
 extern mod http;
 
