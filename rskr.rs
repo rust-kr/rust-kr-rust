@@ -1,9 +1,9 @@
 extern mod extra;
 extern mod http;
 
-use std::rt::io::net::ip::{SocketAddr, Ipv4Addr};
-use std::rt::io::{Writer, File};
-use std::rt::io::fs::readdir;
+use std::io::net::ip::{SocketAddr, Ipv4Addr};
+use std::io::{Writer, File};
+use std::io::fs::readdir;
 
 use extra::time;
 
