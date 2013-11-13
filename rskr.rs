@@ -16,19 +16,20 @@ mod jinja2;
 
 // assumes utf-8
 pub trait PercentDecoder {
-    fn decode_percent(&self) -> ~str;
+    fn decode_percent(&self) -> Option<~str>;
 }
 
 impl<'self> PercentDecoder for &'self str {
-    fn decode_percent(&self) -> ~str {
-        fn hex_to_u8(h: &Ascii) -> u8 {
+    fn decode_percent(&self) -> Option<~str> {
+        fn hex_to_u8(h: &Ascii) -> Option<u8> {
             let h = h.to_byte();
-            match h {
+            let value = match h {
                 0x30..0x39 => h - 0x30, // '0'..'9'
                 0x41..0x46 => h - 0x41 + 10, // 'A'..'F'
                 0x61..0x66 => h - 0x61 + 10, // 'a'..'f'
-                _ => fail!("not a hex value")
-            }
+                _ => return None,
+            };
+            Some(value)
         }
 
         let mut buf: ~[u8] = ~[];
@@ -40,8 +41,16 @@ impl<'self> PercentDecoder for &'self str {
                 Some(c) => {
                     let c = c.to_byte();
                     if c == 0x25 {
-                        let c1 = hex_to_u8(it.next().unwrap());
-                        let c2 = hex_to_u8(it.next().unwrap());
+                        let c1 = do it.next().and_then |n| { hex_to_u8(n) };
+                        let c1 = match c1 {
+                            None => return None,
+                            Some(c) => c,
+                        };
+                        let c2 = do it.next().and_then |n| { hex_to_u8(n) };
+                        let c2 = match c2 {
+                            None => return None,
+                            Some(c) => c,
+                        };
                         let cc = c1 * 16 + c2;
                         buf.push(cc);
                     } else {
@@ -51,7 +60,7 @@ impl<'self> PercentDecoder for &'self str {
             }
         }
 
-        std::str::from_utf8_owned(buf)
+        std::str::from_utf8_owned_opt(buf)
     }
 }
 
@@ -76,19 +85,29 @@ impl Server for RustKrServer {
                 // remove '/'
                 let title = url.slice_from(1);
                 if self.is_bad_title(title) {
+                    // TODO 404
                     (~":p", ~"Bad title")
                 } else {
-                    let title = if title.len() == 0 {
-                        ~"index"
-                    } else {
-                        title.decode_percent()
+                    let title = title.decode_percent();
+                    let (title, page) = match title {
+                        Some(title) => {
+                            if title == ~"_pages" {
+                                (~"모든 문서", self.list_pages())
+                            } else {
+                                let title = if title.len() == 0 {
+                                    ~"index"
+                                } else {
+                                    title
+                                };
+                                let page = self.read_page(title);
+                                (title, page)
+                            }
+                        }
+                        None => {
+                            (~"No such page", self.no_such_page())
+                        }
                     };
-                    if title == ~"_pages" {
-                        (~"모든 문서", self.list_pages())
-                    } else {
-                        let page = self.read_page(title);
-                        (title, page)
-                    }
+                    (title, page)
                 }
             },
             _ => {
@@ -149,6 +168,11 @@ impl RustKrServer {
         format!("{}", md)
     }
 
+    fn no_such_page(&self) -> ~str {
+        // TODO 404
+        ~"No such page"
+    }
+
     pub fn list_pages(&self) -> ~str {
         let files = {
             let dir = Path::new(self.doc_dir.clone());
@@ -200,13 +224,25 @@ mod test {
     use super::PercentDecoder;
 
     fn compare(input: &str, output: &str) {
-        assert_eq!(input.decode_percent(), output.to_owned());
+        assert_eq!(input.decode_percent().unwrap(), output.to_owned());
     }
+
+    fn assert_none(input: &str) {
+        assert_eq!(input.decode_percent(), None);
+    }
+
     #[test]
     fn decode_percent() {
         compare("abc", "abc");
         compare("a%20bc", "a bc");
         compare("a%2Fbc", "a/bc");
         compare("%EA%B0%80%EB%82%98%EB%8B%A4", "가나다");
+    }
+
+    #[test]
+    fn decode_percent_bad() {
+        assert_none("%");
+        assert_none("%2");
+        assert_none("%FF");
     }
 }
