@@ -1,5 +1,6 @@
 extern mod extra;
 extern mod http;
+extern mod mustache;
 
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
 use std::io::{Writer, File};
@@ -12,7 +13,12 @@ use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
 
 mod markdown;
-mod jinja2;
+
+#[deriving(Encodable)]
+struct Ctx {
+    content: ~str,
+    title: ~str,
+}
 
 // assumes utf-8
 pub trait PercentDecoder {
@@ -119,12 +125,12 @@ impl Server for RustKrServer {
         let mut template_file = File::open(&template_path);
         let template = template_file.read_to_end();
         let template = std::str::from_utf8(template);
-        let template = jinja2::Template::new(template);
-        let values = [
-            ("content", content.as_slice()),
-            ("title", title.as_slice()),
-        ];
-        let output = template.replace(values);
+
+        let ctx = Ctx {
+            content: content,
+            title: title,
+        };
+        let output = mustache::render_str(template, &ctx);
         let output_b = output.as_bytes();
 
         w.headers.date = Some(time::now_utc());
