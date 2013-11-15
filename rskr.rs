@@ -86,63 +86,57 @@ impl Server for RustKrServer {
     }
 
     fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
-        let (title, content) = match r.request_uri {
+        match r.request_uri {
             AbsolutePath(ref url) => {
+                let url = url.as_slice();
                 // remove '/'
-                let title = url.slice_from(1);
-                if self.is_bad_title(title) {
-                    // TODO 404
-                    (~":p", ~"Bad title")
-                } else {
-                    let title = title.decode_percent();
-                    let (title, page) = match title {
-                        Some(title) => {
-                            if title == ~"_pages" {
-                                (~"모든 문서", self.list_pages())
-                            } else {
-                                let title = if title.len() == 0 {
-                                    ~"index"
-                                } else {
-                                    title
-                                };
-                                let page = self.read_page(title);
-                                (title, page)
+                if url.char_at(0) != '/' {
+                    // TODO is this possible?
+                    self.show_bad_request(w);
+                    return;
+                }
+
+                if url == "/" {
+                    self.show_page(w, "index");
+                    return;
+                }
+
+                let url = url.slice_from(1);
+                match url.find('/') {
+                    None => {
+                        self.show_bad_request(w);
+                    }
+                    Some(i) => {
+                        let prefix = url.slice_to(i);
+                        let remaining = url.slice_from(i + 1);
+                        match prefix {
+                            "pages" => {
+                                let title = remaining;
+                                if self.is_bad_title(title) {
+                                    self.show_bad_request(w);
+                                    return;
+                                }
+                                let title = title.decode_percent();
+                                match title {
+                                    Some(title) => self.show_page(w, title),
+                                    None => self.show_bad_request(w),
+                                }
+                            }
+                            "static" => {
+                                self.show_static_file(w, remaining);
+                            }
+                            _ => {
+                                self.show_bad_request(w); // XXX
                             }
                         }
-                        None => {
-                            (~"No such page", self.no_such_page())
-                        }
-                    };
-                    (title, page)
+                    }
                 }
-            },
-            _ => {
-                (~"???", ~"???")
             }
-        };
-
-        let template_path = Path::new("templates/default.html");
-        let mut template_file = File::open(&template_path);
-        let template = template_file.read_to_end();
-        let template = std::str::from_utf8(template);
-
-        let ctx = Ctx {
-            content: content,
-            title: title,
-        };
-        let output = mustache::render_str(template, &ctx);
-        let output_b = output.as_bytes();
-
-        w.headers.date = Some(time::now_utc());
-        w.headers.content_length = Some(output_b.len());
-        w.headers.content_type = Some(MediaType {
-            type_: ~"text",
-            subtype: ~"html",
-            parameters: ~[(~"charset", ~"UTF-8")]
-        });
-        w.headers.server = Some(~"Example");
-
-        w.write(output_b);
+            _ => {
+                // TODO
+                self.show_bad_request(w);
+            }
+        }
     }
 }
 
@@ -161,22 +155,17 @@ impl RustKrServer {
         false
     }
 
-    fn read_page(&self, title: &str) -> ~str {
+    fn read_page(&self, title: &str) -> Option<~str> {
         let path = format!("{:s}/{:s}.md", self.doc_dir, title);
         let path = Path::new(path);
         if !path.exists() {
-            return ~"No such page";
+            return None;
         }
         let mut f = File::open(&path);
         let text = f.read_to_end();
         let text = std::str::from_utf8(text);
         let md = markdown::Markdown(text);
-        format!("{}", md)
-    }
-
-    fn no_such_page(&self) -> ~str {
-        // TODO 404
-        ~"No such page"
+        Some(format!("{}", md))
     }
 
     pub fn list_pages(&self) -> ~str {
@@ -204,13 +193,87 @@ impl RustKrServer {
         if pages.len() > 0 {
             let mut ret = ~"<ul>\n";
             for page in pages.iter() {
-                ret = ret + format!(r#"<li><a href="/{:s}">{:s}</a></li>"#, *page, *page);
+                ret = ret + format!(r#"<li><a href="/pages/{:s}">{:s}</a></li>"#, *page, *page);
             }
             ret = ret + "</ul>";
             ret
         } else {
             ~"No pages found"
         }
+    }
+
+    fn show_bad_request(&self, w: &mut ResponseWriter) {
+        let ctx = Ctx {
+            title: ~"Bad request",
+            content: ~"헐",
+        };
+        // TODO response code
+        self.show_template(w, &ctx);
+    }
+
+    fn show_template(&self, w: &mut ResponseWriter, ctx: &Ctx) {
+        let template_path = Path::new("templates/default.html");
+        let mut template_file = File::open(&template_path);
+        let template = template_file.read_to_end();
+        let template = std::str::from_utf8(template);
+
+        let output = mustache::render_str(template, ctx);
+        let output_b = output.as_bytes();
+
+        w.headers.date = Some(time::now_utc()); // TODO
+        w.headers.content_length = Some(output_b.len());
+        w.headers.content_type = Some(MediaType {
+            type_: ~"text",
+            subtype: ~"html",
+            parameters: ~[(~"charset", ~"UTF-8")]
+        });
+        w.headers.server = Some(~"rust-kr-rust");
+
+        w.write(output_b);
+    }
+
+    fn show_page(&self, w: &mut ResponseWriter, title: &str) {
+        let (title, content) = match title {
+            "_pages" => ("모든 문서", self.list_pages()),
+            _ => {
+                let content = self.read_page(title);
+                match content {
+                    Some(content) => (title, content),
+                    None => (title, ~"No such page"),
+                }
+            }
+        };
+        let ctx = Ctx {
+            title: title.to_owned(),
+            content: content,
+        };
+        self.show_template(w, &ctx);
+    }
+
+    fn show_static_file(&self, w: &mut ResponseWriter, loc: &str) {
+        let path = Path::new(format!("static/{}", loc));
+        if !path.exists() {
+            // TODO 404
+            self.show_bad_request(w);
+            return;
+        }
+        let mut f = File::open(&path);
+        let f = f.read_to_end();
+
+        let subtype = match path.extension_str() {
+            Some("css") => ~"css",
+            _ => ~"plain",
+        };
+        w.headers.date = Some(time::now_utc()); // TODO
+        w.headers.content_length = Some(f.len());
+        w.headers.content_type = Some(MediaType {
+            type_: ~"text",
+            subtype: subtype,
+            parameters: ~[(~"charset", ~"UTF-8")]
+        });
+        w.headers.server = Some(~"rust-kr-rust");
+
+        w.write(f);
     }
 
     pub fn new(doc_dir: ~str) -> RustKrServer {
