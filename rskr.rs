@@ -12,6 +12,7 @@ use extra::time;
 use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
+use http::status;
 
 mod markdown;
 
@@ -106,7 +107,7 @@ impl Server for RustKrServer {
                 let url = url.slice_from(1);
                 match url.find('/') {
                     None => {
-                        self.show_bad_request(w);
+                        self.show_not_found(w);
                     }
                     Some(i) => {
                         let prefix = url.slice_to(i);
@@ -128,7 +129,7 @@ impl Server for RustKrServer {
                                 self.show_static_file(w, remaining);
                             }
                             _ => {
-                                self.show_bad_request(w); // XXX
+                                self.show_not_found(w);
                             }
                         }
                     }
@@ -136,7 +137,7 @@ impl Server for RustKrServer {
             }
             _ => {
                 // TODO
-                self.show_bad_request(w);
+                self.show_not_found(w);
             }
         }
     }
@@ -215,16 +216,23 @@ impl RustKrServer {
         }
     }
 
+    fn show_not_found(&self, w: &mut ResponseWriter) {
+        let ctx = Ctx {
+            title: ~"Not Found",
+            content: ~"헐",
+        };
+        self.show_template(w, &ctx, status::NotFound);
+    }
+
     fn show_bad_request(&self, w: &mut ResponseWriter) {
         let ctx = Ctx {
             title: ~"Bad request",
             content: ~"헐",
         };
-        // TODO response code
-        self.show_template(w, &ctx);
+        self.show_template(w, &ctx, status::BadRequest);
     }
 
-    fn show_template(&self, w: &mut ResponseWriter, ctx: &Ctx) {
+    fn show_template(&self, w: &mut ResponseWriter, ctx: &Ctx, status: status::Status) {
         let template_path = Path::new("templates/default.html");
         let mut template_file = File::open(&template_path);
         let template = template_file.read_to_end();
@@ -241,6 +249,7 @@ impl RustKrServer {
             parameters: ~[(~"charset", ~"UTF-8")]
         });
         w.headers.server = Some(~"rust-kr-rust");
+        w.status = status;
 
         w.write(output_b);
     }
@@ -252,7 +261,9 @@ impl RustKrServer {
                 let content = self.read_page(title);
                 match content {
                     Some(content) => (title, content),
-                    None => (title, ~"No such page"),
+                    None => {
+                        return self.show_not_found(w);
+                    }
                 }
             }
         };
@@ -260,14 +271,13 @@ impl RustKrServer {
             title: title.to_owned(),
             content: content,
         };
-        self.show_template(w, &ctx);
+        self.show_template(w, &ctx, status::Ok);
     }
 
     fn show_static_file(&self, w: &mut ResponseWriter, loc: &str) {
         let path = Path::new(format!("static/{}", loc));
         if !path.exists() {
-            // TODO 404
-            self.show_bad_request(w);
+            self.show_not_found(w);
             return;
         }
         let mut f = File::open(&path);
