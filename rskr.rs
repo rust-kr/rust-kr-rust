@@ -165,19 +165,21 @@ impl RustKrServer {
         }
         let mut f = File::open(&path);
         let text = f.read_to_end();
+        if !std::str::is_utf8(text) {
+            return None;
+        }
         let text = std::str::from_utf8(text);
         let md = markdown::Markdown(text);
         Some(format!("{}", md))
     }
 
     pub fn list_pages(&self) -> ~str {
-        let files = {
-            let dir = Path::new(self.doc_dir.clone());
-            if !dir.exists() {
-                return ~"No pages found";
-            }
-            readdir(&dir)
-        };
+        let dir = Path::new(self.doc_dir.clone());
+        if !dir.exists() {
+            return ~"No pages found";
+        }
+
+        let files = readdir(&dir);
         let mut pages = ~[];
         for file in files.iter() {
             if file.is_dir() {
@@ -186,8 +188,17 @@ impl RustKrServer {
             match file.as_str() {
                 None => continue,
                 Some(s) => {
+                    if self.is_bad_title(s) {
+                        continue;
+                    }
                     if s.ends_with(".md") {
-                        pages.push(file.filestem_str().unwrap().to_owned());
+                        let pagename = file.filestem_str();
+                        match pagename {
+                            None => continue,
+                            Some(ref pagename) => {
+                                pages.push(pagename.to_owned());
+                            }
+                        }
                     }
                 }
             }
