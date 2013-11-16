@@ -189,14 +189,14 @@ impl RustKrServer {
             match file.as_str() {
                 None => continue,
                 Some(s) => {
-                    if self.is_bad_title(s) {
-                        continue;
-                    }
                     if s.ends_with(".md") {
                         let pagename = file.filestem_str();
                         match pagename {
                             None => continue,
-                            Some(ref pagename) => {
+                            Some(pagename) => {
+                                if self.is_bad_title(pagename) {
+                                    continue;
+                                }
                                 pages.push(pagename.to_owned());
                             }
                         }
@@ -204,6 +204,7 @@ impl RustKrServer {
                 }
             }
         }
+
         if pages.len() > 0 {
             let mut ret = ~"<ul>\n";
             for page in pages.iter() {
