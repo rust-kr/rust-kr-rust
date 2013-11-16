@@ -2,10 +2,11 @@ extern mod extra;
 extern mod http;
 extern mod mustache;
 
-use std::io::net::ip::{SocketAddr, Ipv4Addr};
+use std::io::net::ip::{SocketAddr, Ipv4Addr, Port};
 use std::io::{Writer, File};
 use std::io::fs::readdir;
 
+use extra::getopts;
 use extra::time;
 
 use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
@@ -73,6 +74,7 @@ impl<'self> PercentDecoder for &'self str {
 #[deriving(Clone)]
 struct RustKrServer {
     doc_dir: ~str,
+    port: Port,
 }
 
 impl Server for RustKrServer {
@@ -80,7 +82,7 @@ impl Server for RustKrServer {
         Config {
             bind_address: SocketAddr {
                 ip: Ipv4Addr(127, 0, 0, 1),
-                port: 8001,
+                port: self.port,
             }
         }
     }
@@ -276,15 +278,26 @@ impl RustKrServer {
         w.write(f);
     }
 
-    pub fn new(doc_dir: ~str) -> RustKrServer {
+    pub fn new(doc_dir: ~str, port: Port) -> RustKrServer {
         RustKrServer {
             doc_dir: doc_dir,
+            port: port,
         }
     }
 }
 
 fn main() {
-    let server = RustKrServer::new(~"docs");
+    let opts = [
+        getopts::optopt("p"),
+    ];
+
+    let args = std::os::args();
+    let args = args.slice_from(1);
+    let matches = getopts::getopts(args, opts).expect("Bad opts");
+
+    let port = matches.opt_str("p").unwrap_or(~"8001");
+    let port = from_str(port).expect("Port number");
+    let server = RustKrServer::new(~"docs", port);
     server.serve_forever();
 }
 
