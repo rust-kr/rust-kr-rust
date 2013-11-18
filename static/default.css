@@ -14,9 +14,17 @@ article {
     border-top: 2px solid #DDDDDD;
 }
 
-footer {
+body > footer {
     font-size: 13px;
 
     border-top: 2px solid #DDDDDD;
     padding: 2px;
+}
+
+body > footer ul {
+    padding: 0;
+}
+
+body > footer ul li {
+    display: inline;
 }
