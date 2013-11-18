@@ -7,7 +7,7 @@
 <link rel="stylesheet" type="text/css" href="/static/default.css" />
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
 </head>
-<body>
+<body onload="update()">
 <h1>
 <a href="/"><img src="http://www.rust-lang.org/logos/rust-logo-128x128.png" alt="Rust logo" /></a>
 <a href="/">rust-kr.org</a> - 한국 러스트 사용자 그룹
@@ -31,7 +31,7 @@ Rust,
 <div id="irc">
     <ul id="log"> </ul>
     <p>
-    Nick:<input type="text" name="nick" size="16" value="web0286" />
+    Nick:<input type="text" name="nick" size="16" value="web0000" />
     Text:<input type="text" name="text" size="80" />
     <a href="#" onclick="javacript:send()">Send</a>
     </p>
@@ -57,7 +57,6 @@ function update() {
     update();
   });
 }
-update();
 
 function send() {
   var nick = $('input[name=nick]').val();
@@ -67,6 +66,9 @@ function send() {
     textinput.val('');
   }
 }
+
+$('input[name=nick]').val(('0000'+(Math.random()*10000|0)).replace(/^.*(....)$/,'web$1'));
+
 --></script>
 
 </body>
