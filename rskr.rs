@@ -89,51 +89,43 @@ impl Server for RustKrServer {
     }
 
     fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
+        // TODO macro
+        let map = [
+            ("/static/", |remaining: &str, r: &Request, w: &mut ResponseWriter| {
+                self.handle_static_file(remaining, r, w)
+            }),
+            ("/pages/", |remaining: &str, r: &Request, w: &mut ResponseWriter| {
+                self.handle_page(remaining, r, w)
+            }),
+            ("/", |remaining: &str, r: &Request, w: &mut ResponseWriter| {
+                self.handle_index_page(remaining, r, w)
+            }),
+        ];
+
         match r.request_uri {
             AbsolutePath(ref url) => {
                 let url = url.as_slice();
-                // remove '/'
-                if url.char_at(0) != '/' {
-                    // TODO is this possible?
-                    self.show_bad_request(w);
-                    return;
-                }
 
-                if url == "/" {
-                    self.show_page(w, "index");
-                    return;
-                }
-
-                let url = url.slice_from(1);
-                match url.find('/') {
+                // ignore any bad urls
+                let url = url.decode_percent();
+                let url = match url {
                     None => {
-                        self.show_not_found(w);
+                        self.show_bad_request(w);
+                        return;
                     }
-                    Some(i) => {
-                        let prefix = url.slice_to(i);
-                        let remaining = url.slice_from(i + 1);
-                        match prefix {
-                            "pages" => {
-                                let title = remaining;
-                                if self.is_bad_title(title) {
-                                    self.show_bad_request(w);
-                                    return;
-                                }
-                                let title = title.decode_percent();
-                                match title {
-                                    Some(title) => self.show_page(w, title),
-                                    None => self.show_bad_request(w),
-                                }
-                            }
-                            "static" => {
-                                self.show_static_file(w, remaining);
-                            }
-                            _ => {
-                                self.show_not_found(w);
-                            }
-                        }
+                    Some(url) => url,
+                };
+
+                for &(ref prefix, ref handler) in map.iter() {
+                    if url.starts_with(*prefix) {
+                        let remaining = url.slice_from(prefix.len());
+                        (*handler)(remaining, r, w);
+                        return;
                     }
                 }
+
+                // default handler
+                self.show_not_found(w);
             }
             _ => {
                 // TODO
@@ -255,7 +247,15 @@ impl RustKrServer {
         w.write(output_b);
     }
 
-    fn show_page(&self, w: &mut ResponseWriter, title: &str) {
+    fn handle_index_page(&self, remaining: &str, r: &Request, w: &mut ResponseWriter) {
+        if remaining.len() > 0 {
+            self.show_not_found(w);
+            return;
+        }
+        self.handle_page("index", r, w);
+    }
+
+    fn handle_page(&self, title: &str, _: &Request, w: &mut ResponseWriter) {
         let (title, content) = match title {
             "_pages" => ("모든 문서", self.list_pages()),
             _ => {
@@ -275,7 +275,7 @@ impl RustKrServer {
         self.show_template(w, &ctx, status::Ok);
     }
 
-    fn show_static_file(&self, w: &mut ResponseWriter, loc: &str) {
+    fn handle_static_file(&self, loc: &str, _: &Request, w: &mut ResponseWriter) {
         let path = Path::new(format!("static/{}", loc));
         if !path.exists() {
             self.show_not_found(w);
