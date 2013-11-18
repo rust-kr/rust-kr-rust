@@ -5,6 +5,7 @@
 <title>한국 러스트 사용자 그룹</title>
 <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css" />
 <link rel="stylesheet" type="text/css" href="/static/default.css" />
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
 </head>
 <body>
 <h1>
@@ -26,5 +27,47 @@ Rust,
 <li><a href="https://github.com/klutzy/rust-kr-rust">사이트 소스 보기</a></li>
 </ul>
 </footer>
+
+<div id="irc">
+    <ul id="log"> </ul>
+    <p>
+    Nick:<input type="text" name="nick" size="16" value="web0286" />
+    Text:<input type="text" name="text" size="80" />
+    <a href="#" onclick="javacript:send()">Send</a>
+    </p>
+</div>
+
+<script type="text/javascript" language="javacript"><!--
+var textinput = $('input[name=text]');
+textinput.keypress(function(e) {
+  if (e.keyCode == 13) {
+    return send();
+  }
+});
+
+var lasttime = 0;
+function update() {
+  $.get('//python.rust-kr.org/api/update', {time: lasttime}, null, 'jsonp').done(function(data) {
+    var items = eval(data);
+    for (var index in items) {
+      var logbox = $('ul#log');
+      lasttime = items[index][0];
+      $('<li/>').text('<' + items[index][1] + '> ' + items[index][2]).appendTo(logbox);
+    }
+    update();
+  });
+}
+update();
+
+function send() {
+  var nick = $('input[name=nick]').val();
+  var text = textinput.val();
+  if (text.length) {
+    $.post('//python.rust-kr.org/api/send', {nick: nick, text: text});
+    textinput.val('');
+  }
+}
+--></script>
+
 </body>
 </html>
