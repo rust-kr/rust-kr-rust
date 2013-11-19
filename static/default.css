@@ -28,3 +28,12 @@ body > footer ul {
 body > footer ul li {
     display: inline;
 }
+
+#irc {
+    border: 2px solid #DDD;
+    padding: 5px;
+}
+
+#log li:nth-child(2n) {
+    background-color: #EEE;
+}
