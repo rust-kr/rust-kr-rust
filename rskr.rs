@@ -9,7 +9,7 @@ use std::io::fs::readdir;
 use extra::getopts;
 use extra::time;
 
-use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
+use http::server::{Config, Server, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
 use http::status;
@@ -49,12 +49,12 @@ impl<'self> PercentDecoder for &'self str {
                 Some(c) => {
                     let c = c.to_byte();
                     if c == 0x25 {
-                        let c1 = do it.next().and_then |n| { hex_to_u8(n) };
+                        let c1 = it.next().and_then(|n| { hex_to_u8(n) });
                         let c1 = match c1 {
                             None => return None,
                             Some(c) => c,
                         };
-                        let c2 = do it.next().and_then |n| { hex_to_u8(n) };
+                        let c2 = it.next().and_then(|n| { hex_to_u8(n) });
                         let c2 = match c2 {
                             None => return None,
                             Some(c) => c,
@@ -152,7 +152,7 @@ impl RustKrServer {
 
     fn read_page(&self, title: &str) -> Option<~str> {
         let path = format!("{:s}/{:s}.md", self.doc_dir, title);
-        let path = Path::new(path);
+        let path = Path::init(path);
         if !path.exists() {
             return None;
         }
@@ -167,7 +167,7 @@ impl RustKrServer {
     }
 
     pub fn list_pages(&self) -> ~str {
-        let dir = Path::new(self.doc_dir.clone());
+        let dir = Path::init(self.doc_dir.clone());
         if !dir.exists() {
             return ~"No pages found";
         }
@@ -226,7 +226,7 @@ impl RustKrServer {
     }
 
     fn show_template(&self, w: &mut ResponseWriter, ctx: &Ctx, status: status::Status) {
-        let template_path = Path::new("templates/default.html");
+        let template_path = Path::init("templates/default.html");
         let mut template_file = File::open(&template_path);
         let template = template_file.read_to_end();
         let template = std::str::from_utf8(template);
@@ -276,7 +276,7 @@ impl RustKrServer {
     }
 
     fn handle_static_file(&self, loc: &str, _: &Request, w: &mut ResponseWriter) {
-        let path = Path::new(format!("static/{}", loc));
+        let path = Path::init(format!("static/{}", loc));
         if !path.exists() {
             self.show_not_found(w);
             return;
