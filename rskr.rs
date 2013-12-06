@@ -152,7 +152,7 @@ impl RustKrServer {
 
     fn read_page(&self, title: &str) -> Option<~str> {
         let path = format!("{:s}/{:s}.md", self.doc_dir, title);
-        let path = Path::init(path);
+        let path = Path::new(path);
         if !path.exists() {
             return None;
         }
@@ -167,7 +167,7 @@ impl RustKrServer {
     }
 
     pub fn list_pages(&self) -> ~str {
-        let dir = Path::init(self.doc_dir.clone());
+        let dir = Path::new(self.doc_dir.clone());
         if !dir.exists() {
             return ~"No pages found";
         }
@@ -226,7 +226,7 @@ impl RustKrServer {
     }
 
     fn show_template(&self, w: &mut ResponseWriter, ctx: &Ctx, status: status::Status) {
-        let template_path = Path::init("templates/default.html");
+        let template_path = Path::new("templates/default.html");
         let mut template_file = File::open(&template_path);
         let template = template_file.read_to_end();
         let template = std::str::from_utf8(template);
@@ -276,7 +276,7 @@ impl RustKrServer {
     }
 
     fn handle_static_file(&self, loc: &str, _: &Request, w: &mut ResponseWriter) {
-        let path = Path::init(format!("static/{}", loc));
+        let path = Path::new(format!("static/{}", loc));
         if !path.exists() {
             self.show_not_found(w);
             return;
