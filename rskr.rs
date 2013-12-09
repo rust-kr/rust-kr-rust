@@ -14,6 +14,7 @@ use http::server::request::AbsolutePath;
 use http::headers::content_type::MediaType;
 use http::status;
 
+#[allow(dead_code)]
 mod markdown;
 
 #[deriving(Encodable)]
@@ -315,7 +316,7 @@ fn main() {
 
     let args = std::os::args();
     let args = args.slice_from(1);
-    let matches = getopts::getopts(args, opts).expect("Bad opts");
+    let matches = getopts::getopts(args, opts).ok().expect("Bad opts");
 
     let port = matches.opt_str("p").unwrap_or(~"8001");
     let port = from_str(port).expect("Port number");
