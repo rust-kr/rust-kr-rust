@@ -1,5 +1,5 @@
-// This is exact copy of librustdoc/html/markdown.rs
-// since there is an issue regarding `extern mod` and `'self`.
+// This is copy of librustdoc/html/markdown.rs (with trivial modification)
+// due to ICE issue regarding `extern mod` and struct with lifetimes.
 
 // Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
@@ -25,15 +25,18 @@
 //! // ... something using html
 //! ```
 
+use std::cast;
 use std::fmt;
-use std::libc;
 use std::io;
+use std::libc;
+use std::str;
+use std::unstable::intrinsics;
 use std::vec;
 
 /// A unit struct which has the `fmt::Default` trait implemented. When
 /// formatted, this struct will emit the HTML corresponding to the rendered
 /// version of the contained markdown string.
-pub struct Markdown<'self>(&'self str);
+pub struct Markdown<'a>(&'a str);
 
 static OUTPUT_UNIT: libc::size_t = 64;
 static MKDEXT_NO_INTRA_EMPHASIS: libc::c_uint = 1 << 0;
@@ -41,14 +44,13 @@ static MKDEXT_TABLES: libc::c_uint = 1 << 1;
 static MKDEXT_FENCED_CODE: libc::c_uint = 1 << 2;
 static MKDEXT_AUTOLINK: libc::c_uint = 1 << 3;
 static MKDEXT_STRIKETHROUGH: libc::c_uint = 1 << 4;
-static MKDEXT_SPACE_HEADERS: libc::c_uint = 1 << 6;
-static MKDEXT_SUPERSCRIPT: libc::c_uint = 1 << 7;
-static MKDEXT_LAX_SPACING: libc::c_uint = 1 << 8;
 
 type sd_markdown = libc::c_void;  // this is opaque to us
 
-// this is a large struct of callbacks we don't use
-type sd_callbacks = [libc::size_t, ..26];
+struct sd_callbacks {
+    blockcode: extern "C" fn(*buf, *buf, *buf, *libc::c_void),
+    other: [libc::size_t, ..25],
+}
 
 struct html_toc_data {
     header_count: libc::c_int,
@@ -62,6 +64,11 @@ struct html_renderopt {
     link_attributes: Option<extern "C" fn(*buf, *buf, *libc::c_void)>,
 }
 
+struct my_opaque {
+    opt: html_renderopt,
+    dfltblk: extern "C" fn(*buf, *buf, *buf, *libc::c_void),
+}
+
 struct buf {
     data: *u8,
     size: libc::size_t,
@@ -70,7 +77,7 @@ struct buf {
 }
 
 // sundown FFI
-#[link(name = "sundown")]
+#[link(name = "sundown", kind = "static")]
 extern {
     fn sdhtml_renderer(callbacks: *sd_callbacks,
                        options_ptr: *html_renderopt,
@@ -90,7 +97,28 @@ extern {
 
 }
 
-fn render(w: &mut io::Writer, s: &str) {
+pub fn render(w: &mut io::Writer, s: &str) {
+    extern fn block(ob: *buf, text: *buf, lang: *buf, opaque: *libc::c_void) {
+        unsafe {
+            let my_opaque: &my_opaque = cast::transmute(opaque);
+            vec::raw::buf_as_slice((*text).data, (*text).size as uint, |text| {
+                let text = str::from_utf8(text);
+                let mut lines = text.lines().filter(|l| {
+                    !l.trim().starts_with("#")
+                });
+                let text = lines.to_owned_vec().connect("\n");
+
+                let buf = buf {
+                    data: text.as_bytes().as_ptr(),
+                    size: text.len() as libc::size_t,
+                    asize: text.len() as libc::size_t,
+                    unit: 0,
+                };
+                (my_opaque.dfltblk)(ob, &buf, lang, opaque);
+            })
+        }
+    }
+
     // This code is all lifted from examples/sundown.c in the sundown repo
     unsafe {
         let ob = bufnew(OUTPUT_UNIT);
@@ -106,15 +134,19 @@ fn render(w: &mut io::Writer, s: &str) {
             flags: 0,
             link_attributes: None,
         };
-        let callbacks: sd_callbacks = [0, ..26];
+        let mut callbacks: sd_callbacks = intrinsics::init();
 
         sdhtml_renderer(&callbacks, &options, 0);
+        let opaque = my_opaque {
+            opt: options,
+            dfltblk: callbacks.blockcode,
+        };
+        callbacks.blockcode = block;
         let markdown = sd_markdown_new(extensions, 16, &callbacks,
-                                       &options as *html_renderopt as *libc::c_void);
+                                       &opaque as *my_opaque as *libc::c_void);
 
-        s.as_imm_buf(|data, len| {
-            sd_markdown_render(ob, data, len as libc::size_t, markdown);
-        });
+
+        sd_markdown_render(ob, s.as_ptr(), s.len() as libc::size_t, markdown);
         sd_markdown_free(markdown);
 
         vec::raw::buf_as_slice((*ob).data, (*ob).size as uint, |buf| {
@@ -125,8 +157,8 @@ fn render(w: &mut io::Writer, s: &str) {
     }
 }
 
-impl<'self> fmt::Default for Markdown<'self> {
-    fn fmt(md: &Markdown<'self>, fmt: &mut fmt::Formatter) {
+impl<'a> fmt::Default for Markdown<'a> {
+    fn fmt(md: &Markdown<'a>, fmt: &mut fmt::Formatter) {
         // This is actually common enough to special-case
         if md.len() == 0 { return; }
         render(fmt.buf, md.as_slice());

@@ -28,7 +28,7 @@ pub trait PercentDecoder {
     fn decode_percent(&self) -> Option<~str>;
 }
 
-impl<'self> PercentDecoder for &'self str {
+impl<'a> PercentDecoder for &'a str {
     fn decode_percent(&self) -> Option<~str> {
         fn hex_to_u8(h: &Ascii) -> Option<u8> {
             let h = h.to_byte();
