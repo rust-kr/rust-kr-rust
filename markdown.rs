@@ -1,5 +1,5 @@
 // This is copy of librustdoc/html/markdown.rs (with trivial modification)
-// due to ICE issue regarding `extern mod` and struct with lifetimes.
+// due to rustc bug: mozilla/rust#11529
 
 // Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
@@ -97,15 +97,26 @@ extern {
 
 }
 
+/// Returns Some(code) if `s` is a line that should be stripped from
+/// documentation but used in example code. `code` is the portion of
+/// `s` that should be used in tests. (None for lines that should be
+/// left as-is.)
+fn stripped_filtered_line<'a>(s: &'a str) -> Option<&'a str> {
+    let trimmed = s.trim();
+    if trimmed.starts_with("# ") {
+        Some(trimmed.slice_from(2))
+    } else {
+        None
+    }
+}
+
 pub fn render(w: &mut io::Writer, s: &str) {
     extern fn block(ob: *buf, text: *buf, lang: *buf, opaque: *libc::c_void) {
         unsafe {
             let my_opaque: &my_opaque = cast::transmute(opaque);
             vec::raw::buf_as_slice((*text).data, (*text).size as uint, |text| {
                 let text = str::from_utf8(text);
-                let mut lines = text.lines().filter(|l| {
-                    !l.trim().starts_with("#")
-                });
+                let mut lines = text.lines().filter(|l| stripped_filtered_line(*l).is_none());
                 let text = lines.to_owned_vec().connect("\n");
 
                 let buf = buf {
@@ -159,6 +170,7 @@ pub fn render(w: &mut io::Writer, s: &str) {
 
 impl<'a> fmt::Default for Markdown<'a> {
     fn fmt(md: &Markdown<'a>, fmt: &mut fmt::Formatter) {
+        let Markdown(md) = *md;
         // This is actually common enough to special-case
         if md.len() == 0 { return; }
         render(fmt.buf, md.as_slice());
