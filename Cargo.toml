@@ -1,0 +1,29 @@
+[package]
+
+name = "rust-kr-rust"
+version = "0.0.1"
+authors = ["klutzy <klutzytheklutzy@gmail.com>"]
+
+[[bin]]
+
+name = "rust-kr"
+path = "src/main.rs"
+
+[dependencies]
+
+rustc-serialize = "*"
+mime = "*"
+hyper = "*"
+chrono = "*"
+url = "*"
+log = "*"
+env_logger = "*"
+
+[dependencies.rust-mustache]
+
+git = "https://github.com/nickel-org/rust-mustache"
+
+[dependencies.getopts]
+
+git = "https://github.com/klutzy/getopts"
+branch = "update"
