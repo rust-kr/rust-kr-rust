@@ -257,6 +257,7 @@ fn main() {
     opts.optopt("", "docs", "path of markdown docs", "PATH");
     opts.optopt("", "static", "path of static files", "PATH");
     opts.optopt("", "template", "template path", "PATH");
+    opts.optopt("", "num-threads", "size of thread pool", "NUM");
 
     let args: Vec<_> = std::env::args().skip(1).collect();
     let matches = opts.parse(&args).ok().expect("Bad opts");
@@ -265,8 +266,10 @@ fn main() {
     let static_dir = matches.opt_str("static").unwrap_or("static".to_string());
     let template_path = matches.opt_str("template")
                                .unwrap_or("templates/default.mustache".to_string());
-    debug!("port: {} / doc_dir: {} / static_dir: {} / template_path: {}",
-           port, doc_dir, static_dir, template_path);
+    let num_threads = matches.opt_str("num-threads").unwrap_or("10".to_string()).parse().unwrap();
+
+    debug!("port: {} / doc_dir: {} / static_dir: {} / template_path: {} / num_threads: {}",
+           port, doc_dir, static_dir, template_path, num_threads);
 
     let template = mustache::compile_path(Path::new(&template_path)).unwrap();
 
@@ -278,7 +281,7 @@ fn main() {
     };
 
     let server = Server::http(Ipv4Addr(127, 0, 0, 1), port);
-    let mut listening = server.listen(rskr).unwrap();
+    let mut listening = server.listen_threads(rskr, num_threads).unwrap();
     debug!("listening...");
     listening.await();
 }
