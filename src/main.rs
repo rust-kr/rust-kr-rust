@@ -144,6 +144,8 @@ impl RustKrServer {
             }
         }
 
+        pages.sort();
+
         if pages.len() > 0 {
             let mut ret = "<ul>\n".to_string();
             for page in pages.iter() {
