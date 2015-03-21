@@ -30,6 +30,10 @@ body > footer ul li {
     display: inline;
 }
 
+body > footer img {
+    height: 50px;
+}
+
 #irc {
     border: 2px solid #DDD;
     padding: 5px;
