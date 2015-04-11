@@ -1,18 +1,20 @@
-#![feature(env, io, path, rustdoc)]
+#![feature(path_ext, rustdoc)]
 
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate rustdoc; // for markdown
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 extern crate mustache;
 extern crate getopts;
 extern crate mime;
 extern crate hyper;
 
-use std::old_io::net::ip::{Ipv4Addr, Port};
-use std::old_io::fs::File;
-use std::old_io::fs::PathExtensions;
-use std::old_io::fs::readdir;
+use std::io::{self, Read, Write};
+use std::net::Ipv4Addr;
+use std::fs::File;
+use std::fs::PathExt;
+use std::fs::read_dir;
+use std::path::Path;
 use rustdoc::html::markdown;
 use hyper::Get;
 use hyper::header::{ContentLength, ContentType};
@@ -36,14 +38,14 @@ struct Ctx {
 
 #[derive(Clone)]
 struct RustKrServer {
-    port: Port,
+    port: u16,
     doc_dir: String,
     static_dir: String,
     template: mustache::Template,
 }
 
 impl Handler for RustKrServer {
-    fn handle<'a>(&'a self, req: Request<'a>, res: Response<'a, Fresh>) {
+    fn handle<'a, 'k>(&'a self, req: Request<'a, 'k>, res: Response<'a, Fresh>) {
         if req.method == Get {
             let uri = req.uri.clone();
             if let AbsolutePath(ref uri) = uri {
@@ -91,48 +93,47 @@ impl RustKrServer {
         false
     }
 
-    fn read_page(&self, title: &str) -> Option<String> {
+    fn read_page(&self, title: &str) -> io::Result<String> {
         let path = format!("{}/{}.md", self.doc_dir, title);
-        let path = Path::new(path);
-        if !path.exists() {
-            return None;
-        }
-        let mut f = File::open(&path);
-        let text = match f.read_to_end() {
-            Ok(text) => text,
-            Err(_) => return None,
-        };
-        let text = match std::str::from_utf8(&text) {
-            Ok(text) => text,
-            Err(_) => return None,
-        };
-        let md = markdown::Markdown(text);
-        Some(format!("{}", md))
+        let path = Path::new(&path);
+        let mut f = try!(File::open(&path));
+        let mut text = String::new();
+        try!(f.read_to_string(&mut text));
+        let md = markdown::Markdown(&text);
+        Ok(format!("{}", md))
     }
 
     pub fn list_pages(&self) -> String {
-        let dir = Path::new(self.doc_dir.clone());
+        let dir = Path::new(&self.doc_dir);
         if !dir.exists() {
             return "No pages found".to_string();
         }
 
-        let files = match readdir(&dir) {
+        let files = match read_dir(&dir) {
             Ok(files) => files,
             Err(_) => return "Error during reading dir".to_string(),
         };
         let mut pages = vec![];
-        for file in files.iter() {
+        for file in files {
+            let file = match file {
+                Ok(f) => f.path(),
+                _ => continue,
+            };
             if file.is_dir() {
                 continue;
             }
-            match file.as_str() {
+            match file.as_os_str().to_str() {
                 None => continue,
                 Some(s) => {
                     if s.ends_with(".md") {
-                        let pagename = file.filestem_str();
+                        let pagename = file.file_stem();
                         match pagename {
                             None => continue,
                             Some(pagename) => {
+                                let pagename = match pagename.to_str() {
+                                    Some(p) => p,
+                                    None => continue,
+                                };
                                 if self.is_bad_title(pagename) {
                                     continue;
                                 }
@@ -208,7 +209,7 @@ impl RustKrServer {
             "_pages" => ("모든 문서", self.list_pages()),
             _ => {
                 let content = self.read_page(title);
-                match content {
+                match content.ok() {
                     Some(content) => (title, content),
                     None => {
                         return self.show_not_found(req, res);
@@ -224,23 +225,31 @@ impl RustKrServer {
     }
 
     fn handle_static_file(&self, loc: &str, req: Request, mut res: Response) {
-        let path = Path::new(format!("{}/{}", self.static_dir, loc));
+        let path = format!("{}/{}", self.static_dir, loc);
+        let path = Path::new(&path);
         if !path.exists() {
             self.show_not_found(req, res);
             return;
         }
         let mut f = try_return!(File::open(&path));
-        let output = try_return!(f.read_to_end());
+        let mut output = Vec::new();
+        try_return!(f.read_to_end(&mut output));
 
         {
             let headers = res.headers_mut();
 
             headers.set(ContentLength(output.len() as u64));
 
-            let subtype = match path.extension_str() {
-                Some("css") => mime::SubLevel::Css,
-                _ => mime::SubLevel::Plain,
-            };
+            let mut subtype = mime::SubLevel::Plain;
+            match path.extension() {
+                Some(ext) => {
+                    match ext.to_str() {
+                        Some("css") => subtype = mime::SubLevel::Css,
+                        _ => (),
+                    }
+                }
+                _ => (),
+            }
             let params = vec![(mime::Attr::Charset, mime::Value::Utf8)];
             headers.set(ContentType(mime::Mime(mime::TopLevel::Text, subtype, params)));
         }
@@ -263,7 +272,7 @@ fn main() {
 
     let args: Vec<_> = std::env::args().skip(1).collect();
     let matches = opts.parse(&args).ok().expect("Bad opts");
-    let port: Port = matches.opt_str("port").unwrap_or("8000".to_string()).parse().unwrap();
+    let port: u16 = matches.opt_str("port").unwrap_or("8000".to_string()).parse().unwrap();
     let doc_dir = matches.opt_str("docs").unwrap_or("docs".to_string());
     let static_dir = matches.opt_str("static").unwrap_or("static".to_string());
     let template_path = matches.opt_str("template")
@@ -282,8 +291,8 @@ fn main() {
         template: template,
     };
 
-    let server = Server::http(Ipv4Addr(127, 0, 0, 1), port);
-    let mut listening = server.listen_threads(rskr, num_threads).unwrap();
+    let server = Server::http(rskr);
+    let addr = (Ipv4Addr::new(127, 0, 0, 1), port);
+    server.listen_threads(addr, num_threads).unwrap();
     debug!("listening...");
-    listening.await();
 }
