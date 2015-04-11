@@ -18,12 +18,5 @@ chrono = "*"
 url = "*"
 log = "*"
 env_logger = "*"
-
-[dependencies.rust-mustache]
-
-git = "https://github.com/nickel-org/rust-mustache"
-
-[dependencies.getopts]
-
-git = "https://github.com/klutzy/getopts"
-branch = "update"
+mustache = "*"
+getopts = "*"
