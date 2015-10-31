@@ -1,25 +1,26 @@
-#![feature(path_ext, rustdoc)]
-
 #[macro_use] extern crate log;
 extern crate env_logger;
-extern crate rustdoc; // for markdown
 extern crate rustc_serialize;
 extern crate mustache;
 extern crate getopts;
 extern crate mime;
 extern crate hyper;
+extern crate pulldown_cmark;
 
 use std::io::{self, Read, Write};
 use std::net::Ipv4Addr;
 use std::fs::File;
-use std::fs::PathExt;
 use std::fs::read_dir;
 use std::path::Path;
-use rustdoc::html::markdown;
 use hyper::Get;
 use hyper::header::{ContentLength, ContentType};
 use hyper::server::{Server, Handler, Request, Response, Fresh};
 use hyper::uri::RequestUri::AbsolutePath;
+
+use compat::PathExt;
+
+mod compat;
+mod cmark;
 
 macro_rules! try_return {
     ($e:expr) => {{
@@ -99,7 +100,7 @@ impl RustKrServer {
         let mut f = try!(File::open(&path));
         let mut text = String::new();
         try!(f.read_to_string(&mut text));
-        let md = markdown::Markdown(&text);
+        let md = cmark::to_html(&text);
         Ok(format!("{}", md))
     }
 
@@ -291,8 +292,8 @@ fn main() {
         template: template,
     };
 
-    let server = Server::http(rskr);
     let addr = (Ipv4Addr::new(127, 0, 0, 1), port);
-    server.listen_threads(addr, num_threads).unwrap();
+    let server = Server::http(addr).unwrap();
+    server.handle_threads(rskr, num_threads).unwrap();
     debug!("listening...");
 }
