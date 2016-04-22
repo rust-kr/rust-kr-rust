@@ -237,22 +237,19 @@ impl RustKrServer {
         try_return!(f.read_to_end(&mut output));
 
         {
+            use mime::{Mime, SubLevel, TopLevel};
+
             let headers = res.headers_mut();
 
             headers.set(ContentLength(output.len() as u64));
 
-            let mut subtype = mime::SubLevel::Plain;
-            match path.extension() {
-                Some(ext) => {
-                    match ext.to_str() {
-                        Some("css") => subtype = mime::SubLevel::Css,
-                        _ => (),
-                    }
-                }
-                _ => (),
-            }
+            let (toplevel, sublevel) = match path.extension().and_then(|ext| ext.to_str()) {
+                Some("css") => (TopLevel::Text, SubLevel::Css),
+                Some("svg") => (TopLevel::Image, SubLevel::Ext("svg+xml".to_owned())),
+                _ => (TopLevel::Text, SubLevel::Plain),
+            };
             let params = vec![(mime::Attr::Charset, mime::Value::Utf8)];
-            headers.set(ContentType(mime::Mime(mime::TopLevel::Text, subtype, params)));
+            headers.set(ContentType(Mime(toplevel, sublevel, params)));
         }
 
         let mut res = try_return!(res.start());
