@@ -17,8 +17,6 @@ use hyper::header::{ContentLength, ContentType};
 use hyper::server::{Server, Handler, Request, Response, Fresh};
 use hyper::uri::RequestUri::AbsolutePath;
 
-use compat::PathExt;
-
 mod compat;
 mod cmark;
 
