@@ -199,7 +199,7 @@ impl RustKrServer {
             self.show_not_found(req, res);
             return;
         }
-        self.handle_page("index", req, res);
+        self.handle_page("Home", req, res);
     }
 
     fn handle_page(&self, title: &str, req: Request, res: Response) {
